@@ -16,16 +16,23 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = ("Bridge01", "Support01")
-RESULTS = tuple(f"result{i:02}" for i in range(1, 5))
+MODULES = ("Bridge01", "Support01", "Support02")
+RESULTS = {module: tuple(f"result{i:02}" for i in range(1, count + 1))
+           for module, count in (("Bridge01", 4), ("Support01", 4), ("Support02", 17))}
+OBJECTS = {"Bridge01": (), "Support01": (),
+           "Support02": tuple(f"object{i:02}" for i in range(1, 6))}
+SCOPES = {"Bridge01": (), "Support01": (),
+          "Support02": ("Scope01", "Scope02", "Scope03")}
 ALLOWED_PATHS = {
     ".github/workflows/lean.yml", ".gitignore", "README.md",
     "Verification.lean", "Verification/Basic.lean",
     "Verification/Bridge01.lean", "Verification/Support01.lean",
+    "Verification/Support02.lean",
     "lakefile.toml", "lean-toolchain", "scripts/check_formalization.py",
 }
-# Digests freeze the already reviewed neutral ancillary files.
+# Digests freeze reviewed ancillary files and the definition-bearing module.
 FROZEN = {
+    "Verification/Support02.lean": "88de80f6e82021de839cac449cd5225deb383ec742f525e3b5f8e6d1dddb54c5",
     ".github/workflows/lean.yml": "3e735eafd883c9d2e51dac80f10d2b9429fb7280707be0c84889782ce9d5fed1",
     ".gitignore": "142c3492ed503a2267d84d699162b68169a8ad8661e1394fb235d4cd2746a757",
     "README.md": "887cf9e37f0ba3b6d90bac608ec581de79efdd632f8e8f3e0ae9219a72e7a425",
@@ -107,8 +114,13 @@ def active_lean(source):
     return "".join(result)
 
 
-def check_tokens(source):
-    tokens = set(re.findall(r"[^\W\d]\w*", active_lean(source)))
+def check_tokens(source, reviewed_definitions=()):
+    active = active_lean(source)
+    if reviewed_definitions:
+        require(re.findall(r"\bdef\s+(\S+)", active) == list(reviewed_definitions),
+                "Definition name allowlist mismatch")
+        active = re.sub(r"(?m)^def (?=object[0-9]{2}\s)", "", active)
+    tokens = set(re.findall(r"[^\W\d]\w*", active))
     require(not tokens.intersection(BLOCKED_LEAN), "Disallowed active Lean token")
 
 
@@ -125,7 +137,13 @@ def check_paths(entries):
 
 
 def check_lean(path, source):
-    check_tokens(source)
+    # The sole definition exception is bound to the complete reviewed bytes.
+    definitions = ()
+    if path == "Verification/Support02.lean":
+        require(hashlib.sha256(source.encode("utf-8")).hexdigest() == FROZEN[path],
+                "Reviewed definition-bearing module changed")
+        definitions = OBJECTS["Support02"]
+    check_tokens(source, definitions)
     active = active_lean(source)
     require(active == source, "Lean comments and strings need separate review")
     require("«" not in active and "»" not in active, "Quoted identifiers are not permitted")
@@ -143,13 +161,15 @@ def check_lean(path, source):
     require(re.findall(r"(?m)^[ \t]*namespace\s+(\S+)\s*$", active) == [namespace]
             and len(re.findall(r"\bnamespace\b", active)) == 1,
             "Namespace allowlist mismatch")
-    require(re.findall(r"(?m)^[ \t]*end\s+(\S+)\s*$", active) == [namespace]
-            and len(re.findall(r"\bend\b", active)) == 1,
+    require(re.findall(r"(?m)^[ \t]*end\s+(\S+)\s*$", active)
+            == list(SCOPES[module]) + [namespace]
+            and len(re.findall(r"\bend\b", active)) == len(SCOPES[module]) + 1,
             "Namespace closing mismatch")
-    require(re.findall(r"\btheorem\s+(\S+)", active) == list(RESULTS),
+    require(re.findall(r"\btheorem\s+(\S+)", active) == list(RESULTS[module]),
             "Theorem name allowlist mismatch")
     require(not re.search(r"\b(?:lemma|example)\b", active), "Unexpected declaration")
-    expected_prints = [f"#print axioms {namespace}.{name}" for name in RESULTS]
+    expected_prints = [f"#print axioms {namespace}.{name}"
+                       for name in RESULTS[module] + OBJECTS[module]]
     require(re.findall(r"(?m)^[ \t]*#.*$", active) == expected_prints
             and active.count("#") == len(expected_prints),
             "Command allowlist mismatch")
@@ -209,8 +229,9 @@ def check_axioms():
                               cwd=ROOT, capture_output=True, text=True)
         require(proc.returncode == 0, "Theorem axiom-check compilation failed")
         parse_axioms(proc.stdout + proc.stderr,
-                     [f"Verification.{module}.{name}" for name in RESULTS])
-    print("All eight theorem axiom checks passed")
+                     [f"Verification.{module}.{name}"
+                      for name in RESULTS[module] + OBJECTS[module]])
+    print("All reviewed declaration axiom checks passed")
 
 
 def self_test():
@@ -236,14 +257,24 @@ def self_test():
     rejects(check_paths, {p: m for p, m in valid.items() if p != "Verification.lean"})
     rejects(check_lean, "Verification.lean", "import Verification.Basic\n")
     sample = "import Mathlib\nnamespace Verification.Bridge01\n" + "\n".join(
-        f"theorem {name} : True := by trivial" for name in RESULTS
+        f"theorem {name} : True := by trivial" for name in RESULTS["Bridge01"]
     ) + "\n" + "\n".join(
-        f"#print axioms Verification.Bridge01.{name}" for name in RESULTS
+        f"#print axioms Verification.Bridge01.{name}" for name in RESULTS["Bridge01"]
     ) + "\nend Verification.Bridge01\n"
     check_lean("Verification/Bridge01.lean", sample)
     for addition in ('open Nat in #eval 1', ' import Init', '-- note',
                      '"note"', '«note»', ' namespace Other'):
         rejects(check_lean, "Verification/Bridge01.lean", sample + addition + "\n")
+    reviewed = (ROOT / "Verification/Support02.lean").read_text()
+    check_lean("Verification/Support02.lean", reviewed)
+    for addition in ("\ndef object06 : Nat := 0\n", "\naxiom result18 : False\n",
+                     "\n-- note\n", "\n#print axioms Nat.add_comm\n"):
+        rejects(check_lean, "Verification/Support02.lean", reviewed + addition)
+    rejects(check_lean, "Verification/Support02.lean",
+            reviewed.replace("result17", "result18"))
+    rejects(check_lean, "Verification/Support02.lean",
+            reviewed.replace("object05", "object06"))
+    rejects(check_lean, "Verification/Bridge01.lean", sample + "\ndef object01 : Nat := 0\n")
     parse_axioms("'Verification.Bridge01.result01' depends on axioms: "
                  "[propext, Classical.choice, Quot.sound]", ["Verification.Bridge01.result01"])
     parse_axioms("'Verification.Support01.result03' does not depend on any axioms",
