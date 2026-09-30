@@ -6,11 +6,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Test formalization gate
+        run: python3 scripts/check_formalization.py --self-test
+
+      - name: Check tracked sources
+        run: python3 scripts/check_formalization.py --sources
 
       - name: Install elan
         run: |
@@ -20,7 +30,11 @@ jobs:
       - name: Resolve dependencies
         run: |
           lake update
+          python3 scripts/check_formalization.py --dependencies
           lake exe cache get
 
       - name: Build
         run: lake build
+
+      - name: Check theorem axioms
+        run: python3 scripts/check_formalization.py --axioms
