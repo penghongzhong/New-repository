@@ -2,3 +2,9 @@ import Verification.Basic
 import Verification.Bridge01
 import Verification.Support01
 import Verification.Support02
+import Verification.Core02
+import Verification.Bridge02
+import Verification.Support03
+import Verification.Bridge03
+import Verification.Core03
+import Verification.Support04

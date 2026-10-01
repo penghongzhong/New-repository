@@ -16,22 +16,36 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = ("Bridge01", "Support01", "Support02")
-RESULTS = {module: tuple(f"result{i:02}" for i in range(1, count + 1))
-           for module, count in (("Bridge01", 4), ("Support01", 4), ("Support02", 17))}
-OBJECTS = {"Bridge01": (), "Support01": (),
-           "Support02": tuple(f"object{i:02}" for i in range(1, 6))}
-SCOPES = {"Bridge01": (), "Support01": (),
-          "Support02": ("Scope01", "Scope02", "Scope03")}
+MODULES = ('Bridge01', 'Support01', 'Support02', 'Core02', 'Bridge02', 'Support03', 'Bridge03', 'Core03', 'Support04')
+RESULTS = {'Bridge01': ('result01', 'result02', 'result03', 'result04'), 'Support01': ('result01', 'result02', 'result03', 'result04'), 'Support02': ('result01', 'result02', 'result03', 'result04', 'result05', 'result06', 'result07', 'result08', 'result09', 'result10', 'result11', 'result12', 'result13', 'result14', 'result15', 'result16', 'result17'), 'Core02': ('result01', 'result02', 'result03', 'result04', 'result05', 'result06', 'result07', 'result08', 'result09', 'result10', 'result11', 'result12', 'result13', 'result14', 'result15'), 'Bridge02': ('result01', 'result02', 'result03', 'result04', 'result05', 'result06', 'result07', 'result08', 'result09', 'result10', 'result11', 'result12', 'result13', 'result14', 'result15', 'result16', 'result17', 'result18', 'result19'), 'Support03': ('result16', 'result17', 'result18', 'result19', 'result20', 'result21', 'result22', 'result23', 'result24', 'result25', 'result26', 'result27'), 'Bridge03': ('result28', 'result29', 'result30', 'result31', 'result32', 'result33', 'result34', 'result35', 'result36', 'result37', 'result38', 'result39', 'result40', 'result41', 'result42', 'result43', 'result44', 'result45'), 'Core03': ('result46', 'result47', 'result48', 'result49', 'result50', 'result51', 'result52', 'result53', 'result54', 'result55', 'result56', 'result57', 'result58', 'result59', 'result60', 'result61', 'result62', 'result63'), 'Support04': ('result64', 'result65')}
+OBJECTS = {'Bridge01': (), 'Support01': (), 'Support02': ('object01', 'object02', 'object03', 'object04', 'object05'), 'Core02': ('object01', 'object02', 'object03', 'object04'), 'Bridge02': ('object01', 'object02', 'object03', 'object04'), 'Support03': ('object05', 'object06'), 'Bridge03': ('object07', 'object08'), 'Core03': ('object09', 'object10', 'object11', 'object12'), 'Support04': ('object13', 'object14', 'object15')}
+ABBREVIATIONS = {'Bridge01': (), 'Support01': (), 'Support02': (), 'Core02': ('type01', 'type02'), 'Bridge02': ('type01', 'type02', 'type03'), 'Support03': (), 'Bridge03': (), 'Core03': (), 'Support04': ()}
+INSTANCES = {'Bridge01': (), 'Support01': (), 'Support02': (), 'Core02': ('inst01',), 'Bridge02': (), 'Support03': (), 'Bridge03': (), 'Core03': (), 'Support04': ()}
+LEMMAS = {'Bridge01': (), 'Support01': (), 'Support02': (), 'Core02': (), 'Bridge02': ('result01', 'result02', 'result03', 'result04', 'result05', 'result06', 'result07', 'result08', 'result09', 'result10', 'result11', 'result12', 'result13', 'result14', 'result15', 'result16', 'result17', 'result18', 'result19'), 'Support03': (), 'Bridge03': (), 'Core03': (), 'Support04': ()}
+NAMESPACES = {'Bridge01': 'Verification.Bridge01', 'Support01': 'Verification.Support01', 'Support02': 'Verification.Support02', 'Core02': 'Verification.Core02', 'Bridge02': 'Verification.Bridge02', 'Support03': 'Verification.Core02', 'Bridge03': 'Verification.Core02', 'Core03': 'Verification.Core02', 'Support04': 'Verification.Core02'}
+IMPORTS = {'Bridge01': ('Mathlib',), 'Support01': ('Mathlib',), 'Support02': ('Mathlib',), 'Core02': ('Mathlib',), 'Bridge02': ('Mathlib', 'Verification.Core02'), 'Support03': ('Mathlib', 'Verification.Core02', 'Verification.Support02'), 'Bridge03': ('Mathlib', 'Verification.Core02', 'Verification.Bridge02', 'Verification.Support03'), 'Core03': ('Mathlib', 'Verification.Bridge03'), 'Support04': ('Mathlib', 'Verification.Core02')}
+SCOPES = {'Bridge01': (), 'Support01': (), 'Support02': ('Scope01', 'Scope02', 'Scope03'), 'Core02': (), 'Bridge02': (), 'Support03': (), 'Bridge03': (), 'Core03': (), 'Support04': ()}
 ALLOWED_PATHS = {
     ".github/workflows/lean.yml", ".gitignore", "README.md",
     "Verification.lean", "Verification/Basic.lean",
     "Verification/Bridge01.lean", "Verification/Support01.lean",
     "Verification/Support02.lean",
+    "Verification/Core02.lean",
+    "Verification/Bridge02.lean",
+    "Verification/Support03.lean",
+    "Verification/Bridge03.lean",
+    "Verification/Core03.lean",
+    "Verification/Support04.lean",
     "lakefile.toml", "lean-toolchain", "scripts/check_formalization.py",
 }
-# Digests freeze reviewed ancillary files and the definition-bearing module.
+# Digests freeze reviewed ancillary files and exact reviewed declaration modules.
 FROZEN = {
+    "Verification/Core02.lean": "7ef93ef4d0e95d48a444a24c05327c438a25776d5df1aa0e86cd21a6e245b5d0",
+    "Verification/Bridge02.lean": "e211d6ba08f796b9f6226f4f122b21ab188c76ca9c491b527de5214c28f9b4ee",
+    "Verification/Support03.lean": "96c65f8fe617d55fa71221ab6a839428fd61b8411d12ebee6f54dc488f7c0dac",
+    "Verification/Bridge03.lean": "f21091baa8707c4bed3905cde2b41e66d5fab20a2cb7680d4390b45da68aa731",
+    "Verification/Core03.lean": "acf907bb8dbec1bdce1e94063c36bd6a0cd75c2a8040e2b752750259b1db1b05",
+    "Verification/Support04.lean": "c30669095cf8f30f985bc6f63768a2067aefcd4e77bfe67a57062e849bd3f9ed",
     "Verification/Support02.lean": "88de80f6e82021de839cac449cd5225deb383ec742f525e3b5f8e6d1dddb54c5",
     ".github/workflows/lean.yml": "3e735eafd883c9d2e51dac80f10d2b9429fb7280707be0c84889782ce9d5fed1",
     ".gitignore": "142c3492ed503a2267d84d699162b68169a8ad8661e1394fb235d4cd2746a757",
@@ -114,12 +128,20 @@ def active_lean(source):
     return "".join(result)
 
 
-def check_tokens(source, reviewed_definitions=()):
+def check_tokens(source, reviewed_definitions=(), reviewed_abbreviations=(), reviewed_instances=()):
     active = active_lean(source)
     if reviewed_definitions:
         require(re.findall(r"\bdef\s+(\S+)", active) == list(reviewed_definitions),
                 "Definition name allowlist mismatch")
         active = re.sub(r"(?m)^def (?=object[0-9]{2}\s)", "", active)
+    if reviewed_abbreviations:
+        require(re.findall(r"\babbrev\s+(\S+)", active) == list(reviewed_abbreviations),
+                "Abbreviation name allowlist mismatch")
+        active = re.sub(r"(?m)^abbrev (?=type[0-9]{2}\s)", "", active)
+    if reviewed_instances:
+        require(re.findall(r"\binstance\s+(\S+)", active) == list(reviewed_instances),
+                "Instance name allowlist mismatch")
+        active = re.sub(r"(?m)^local instance (?=inst[0-9]{2}\s)", "", active)
     tokens = set(re.findall(r"[^\W\d]\w*", active))
     require(not tokens.intersection(BLOCKED_LEAN), "Disallowed active Lean token")
 
@@ -137,13 +159,16 @@ def check_paths(entries):
 
 
 def check_lean(path, source):
-    # The sole definition exception is bound to the complete reviewed bytes.
-    definitions = ()
-    if path == "Verification/Support02.lean":
+    # Every declaration exception is bound to the complete reviewed bytes.
+    definitions, abbreviations, instances = (), (), ()
+    module = Path(path).stem
+    if path in FROZEN and module in MODULES:
         require(hashlib.sha256(source.encode("utf-8")).hexdigest() == FROZEN[path],
-                "Reviewed definition-bearing module changed")
-        definitions = OBJECTS["Support02"]
-    check_tokens(source, definitions)
+                "Reviewed declaration module changed")
+        definitions = OBJECTS[module]
+        abbreviations = ABBREVIATIONS[module]
+        instances = INSTANCES[module]
+    check_tokens(source, definitions, abbreviations, instances)
     active = active_lean(source)
     require(active == source, "Lean comments and strings need separate review")
     require("«" not in active and "»" not in active, "Quoted identifiers are not permitted")
@@ -151,13 +176,14 @@ def check_lean(path, source):
         expected = "".join(f"import Verification.{m}\n" for m in ("Basic",) + MODULES)
         require(source == expected, "Root module must import the complete reviewed set")
         return
-    require(re.findall(r"(?m)^[ \t]*import\s+(\S+)\s*$", active) == ["Mathlib"]
-            and len(re.findall(r"\bimport\b", active)) == 1,
+    expected_imports = ("Mathlib",) if module == "Basic" else IMPORTS[module]
+    require(re.findall(r"(?m)^[ \t]*import\s+(\S+)\s*$", active) == list(expected_imports)
+            and len(re.findall(r"\bimport\b", active)) == len(expected_imports),
             "Module import allowlist mismatch")
     if path == "Verification/Basic.lean":
         return  # Its complete contents are frozen above.
     module = Path(path).stem
-    namespace = f"Verification.{module}"
+    namespace = NAMESPACES[module]
     require(re.findall(r"(?m)^[ \t]*namespace\s+(\S+)\s*$", active) == [namespace]
             and len(re.findall(r"\bnamespace\b", active)) == 1,
             "Namespace allowlist mismatch")
@@ -165,11 +191,13 @@ def check_lean(path, source):
             == list(SCOPES[module]) + [namespace]
             and len(re.findall(r"\bend\b", active)) == len(SCOPES[module]) + 1,
             "Namespace closing mismatch")
-    require(re.findall(r"\btheorem\s+(\S+)", active) == list(RESULTS[module]),
-            "Theorem name allowlist mismatch")
-    require(not re.search(r"\b(?:lemma|example)\b", active), "Unexpected declaration")
+    expected_results = [("lemma" if name in LEMMAS[module] else "theorem", name)
+                        for name in RESULTS[module]]
+    require(re.findall(r"\b(theorem|lemma)\s+(\S+)", active) == expected_results,
+            "Theorem kind and name allowlist mismatch")
+    require(not re.search(r"\bexample\b", active), "Unexpected declaration")
     expected_prints = [f"#print axioms {namespace}.{name}"
-                       for name in RESULTS[module] + OBJECTS[module]]
+                       for name in RESULTS[module] + OBJECTS[module] + ABBREVIATIONS[module] + INSTANCES[module]]
     require(re.findall(r"(?m)^[ \t]*#.*$", active) == expected_prints
             and active.count("#") == len(expected_prints),
             "Command allowlist mismatch")
@@ -229,8 +257,8 @@ def check_axioms():
                               cwd=ROOT, capture_output=True, text=True)
         require(proc.returncode == 0, "Theorem axiom-check compilation failed")
         parse_axioms(proc.stdout + proc.stderr,
-                     [f"Verification.{module}.{name}"
-                      for name in RESULTS[module] + OBJECTS[module]])
+                     [f"{NAMESPACES[module]}.{name}"
+                      for name in RESULTS[module] + OBJECTS[module] + ABBREVIATIONS[module] + INSTANCES[module]])
     print("All reviewed declaration axiom checks passed")
 
 
@@ -275,6 +303,23 @@ def self_test():
     rejects(check_lean, "Verification/Support02.lean",
             reviewed.replace("object05", "object06"))
     rejects(check_lean, "Verification/Bridge01.lean", sample + "\ndef object01 : Nat := 0\n")
+    for module in MODULES:
+        path = f"Verification/{module}.lean"
+        if path not in FROZEN:
+            continue
+        reviewed = (ROOT / path).read_text()
+        check_lean(path, reviewed)
+        for addition in ("\ndef object99 : Nat := 0\n", "\nabbrev type99 := Nat\n",
+                         "\nlocal instance inst99 : Fact True := ⟨by trivial⟩\n",
+                         "\nlemma result99 : True := by trivial\n", "\naxiom result99 : False\n",
+                         "\n-- note\n", "\n#print axioms Nat.add_comm\n", "\nimport Init\n"):
+            rejects(check_lean, path, reviewed + addition)
+        rejects(check_lean, path, reviewed.replace(RESULTS[module][0], "result99"))
+    rejects(check_tokens, "abbrev type01 := Nat")
+    rejects(check_tokens, "local instance inst01 : Fact True := ⟨by trivial⟩")
+    rejects(check_tokens, "def object01 : Nat := 0", ("object02",))
+    rejects(check_tokens, "abbrev type01 := Nat", (), ("type02",))
+    rejects(check_tokens, "local instance inst01 : Fact True := ⟨by trivial⟩", (), (), ("inst02",))
     parse_axioms("'Verification.Bridge01.result01' depends on axioms: "
                  "[propext, Classical.choice, Quot.sound]", ["Verification.Bridge01.result01"])
     parse_axioms("'Verification.Support01.result03' does not depend on any axioms",
