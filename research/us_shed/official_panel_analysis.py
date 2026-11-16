@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
+import statsmodels.api as sm
+import shutil
 
 OUT=Path("shed_results")
 OUT.mkdir(exist_ok=True)
@@ -141,7 +143,9 @@ FMT={"main":"Y ~ S*P+L+"+COV,
      "social_security":"Y ~ S*SS+P+L+age_c+I(age_c**2)+C(gender)+C(education)+C(income)+C(region)+insurance",
      "no_baseline_debt":"Y ~ S*P+L+S_prior+"+COV,
      "all_age50":"Y ~ S*P+L+S_prior+Y_prior+"+COV,
-     "unweighted":"Y ~ S*P+L+"+COV}
+     "unweighted":"Y ~ S*P+L+"+COV,
+     "age65":"Y ~ S*P+L+"+COV,
+     "age50_64":"Y ~ S*P+L+"+COV}
 fits={}
 coef=[]
 def model(name,df,group,minimum,unweighted=False):
@@ -171,6 +175,30 @@ fits["social_security"]=model("social_security",base,["S","SS"],12)
 fits["no_baseline_debt"]=model("no_baseline_debt",nodebt,["S","P"],12)
 fits["all_age50"]=model("all_age50",age,["S","P"],12)
 fits["unweighted"]=model("unweighted",base,["S","P"],12,True)
+fits["age65"]=model("age65",base[base.ppage>=65],["S","P"],12)
+fits["age50_64"]=model("age50_64",base[(base.ppage>=50)&(base.ppage<65)],["S","P"],12)
+# Secondary nonlinear link robustness: survey-weighted GLM, standardized over baseline covariates.
+# This is not a causal marginal effect and freq_weights is not a full survey design.
+logistic={"status":"NOT_ESTIMABLE"}
+if fits["main"]["status"]=="OK":
+    try:
+        g=smf.glm(FMT["main"],data=base,family=sm.families.Binomial(),
+                  freq_weights=base.panel_weight).fit(maxiter=300)
+        if not g.converged:
+            raise RuntimeError("weighted binomial GLM did not converge")
+        m={}
+        for sh in [0,1]:
+            for pen in [0,1]:
+                new=base.copy()
+                new["S"]=sh;new["P"]=pen
+                m[f"S{sh}_P{pen}"]=float(np.average(g.predict(new),weights=base.panel_weight))
+        di=(m["S1_P1"]-m["S0_P1"])-(m["S1_P0"]-m["S0_P0"])
+        logistic={"status":"OK","conditional_standardized_risk_difference_interaction":di,
+                  "standardized_predictions":m,
+                  "note":"GLM Binomial with recontact sampling weights; descriptive contrast, no design-based uncertainty"}
+        print("LOGISTIC_ROBUSTNESS",json.dumps(logistic))
+    except Exception as exc:
+        logistic={"status":"NOT_ESTIMABLE","reason":str(exc)}
 groups=[]
 for s in (0.,1.):
     for pt in (0.,1.):
@@ -181,13 +209,14 @@ for s in (0.,1.):
                        "unweighted_y_rate":float(z.Y.mean()) if n else None})
 summary={"provenance":[src24,src25],"sample_flow":flow,"models":fits,
          "key_coefs":[x for x in coef if x["term"] in ["S","P","S:P","L","S:SS","S:P:L"]],
-         "group_rates":groups,
+         "group_rates":groups,"logistic_robustness":logistic,
          "warnings":["SHED is a survey of adults, not an independently sampled household panel",
                      "E2 and E2B both measured in 2025; concurrent association, not temporal causation",
                      "HC3 WLS does not implement full complex-survey variance estimation",
                      "2024/2025 national CPI cannot identify a respondent-level causal inflation effect",
                      "Survey recontact attrition and selection not fully identified"]}
 (OUT/"summary.json").write_text(json.dumps(summary,indent=2))
+shutil.copyfile(__file__,OUT/"official_panel_analysis.py")
 pd.DataFrame(coef).to_csv(OUT/"coefficients.csv",index=False)
 pd.DataFrame(groups).to_csv(OUT/"group_rates.csv",index=False)
 pd.DataFrame([{"step":k,"n":v} for k,v in flow.items()]).to_csv(OUT/"sample_flow.csv",index=False)
