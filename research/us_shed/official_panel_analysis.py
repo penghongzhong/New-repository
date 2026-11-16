@@ -17,6 +17,16 @@ URL="https://www.federalreserve.gov/consumerscommunities/files/SHED_public_use_d
 EXPECTED={2024:{"N":12295,"E2":2937,"E2B":2000,"I0_f":2721,"EF1":7151},
           2025:{"N":12934,"E2":2860,"E2B":2342,"I0_f":2694,"EF1":7327}}
 MISSING=[-1,-2,-3,-7,-8,-9,-99]
+def normalize_binary(raw,name):
+    v=raw.astype("string").str.strip().str.lower()
+    mapped=v.map({"yes":1.0,"no":0.0,"1":1.0,"0":0.0,"1.0":1.0,"0.0":0.0})
+    allowed={"yes","no","1","0","1.0","0.0","-1","-2","-3","-7","-8","-9","-99",
+             "don't know","refused","not asked","missing"}
+    unexpected=v.notna() & (~v.isin(list(allowed)))
+    if unexpected.any():
+        raise RuntimeError(f"{name}: unrecognized categorical codes {v[unexpected].value_counts().head().to_dict()}")
+    return mapped.astype(float)
+
 def get(year):
     url=URL.format(year)
     dest=Path(f"/tmp/SHED_{year}.zip")
@@ -45,8 +55,8 @@ def get(year):
         if key=="N":continue
         if key.lower() not in lookup:raise RuntimeError(f"{year}: missing {key}")
         raw=d[lookup[key.lower()]]
-        b=pd.to_numeric(raw,errors="coerce")
-        print("CODING_CHECK",year,key,"raw",raw.value_counts(dropna=False).head(10).to_dict(),"numeric",b.value_counts(dropna=False).head(10).to_dict(),flush=True)
+        b=normalize_binary(raw,f"{year}:{key}")
+        print("CODING_CHECK",year,key,"raw",raw.value_counts(dropna=False).head(10).to_dict(),"coded",b.value_counts(dropna=False).head(10).to_dict(),flush=True)
         if not b.dropna().isin([0,1,*MISSING]).all():
             raise RuntimeError(f"{year}: nonbinary coding {key}")
         got=int(b.eq(1).sum())
@@ -62,14 +72,21 @@ def col(d,k):
     if k.lower() not in candidates: raise RuntimeError(f"missing {k}")
     return d[candidates[k.lower()]]
 def binary(d,k):
-    v=pd.to_numeric(col(d,k),errors="coerce").replace(MISSING,np.nan)
-    if not v.dropna().isin([0,1]).all():raise RuntimeError(f"invalid {k}: {v.value_counts().head()}")
-    return v.astype(float)
+    return normalize_binary(col(d,k),k)
 def category(d,k,low,high):
-    v=pd.to_numeric(col(d,k),errors="coerce").replace(MISSING,np.nan)
-    if not v.dropna().between(low,high).all():
-        raise RuntimeError(f"bad category {k}: {v.dropna().unique()[:10]}")
-    return v.astype(float)
+    raw=col(d,k)
+    print("CATEGORY_CHECK",k,raw.value_counts(dropna=False).head(12).to_dict(),flush=True)
+    numeric=pd.to_numeric(raw,errors="coerce")
+    if numeric.notna().mean()>0.8:
+        numeric=numeric.replace(MISSING,np.nan)
+        if not numeric.dropna().between(low,high).all():
+            raise RuntimeError(f"bad category {k}: {numeric.dropna().unique()[:10]}")
+        return numeric.astype(float)
+    v=raw.astype("string").str.strip()
+    v=v.mask(v.str.lower().isin(["don't know","refused","prefer not to answer","not answered","-2","-1","nan"]),pd.NA)
+    if v.dropna().nunique()>high-low+1:
+        print("CATEGORY_WARN",k,"more than expected levels",v.value_counts(dropna=False).head(12).to_dict())
+    return v.astype(object)
 d24,src24=get(2024)
 d25,src25=get(2025)
 b24=pd.DataFrame({"shedid":col(d24,"shedid").astype("string").str.strip()})
