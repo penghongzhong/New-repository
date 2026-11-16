@@ -44,7 +44,9 @@ def get(year):
     for key,val in EXPECTED[year].items():
         if key=="N":continue
         if key.lower() not in lookup:raise RuntimeError(f"{year}: missing {key}")
-        b=pd.to_numeric(d[lookup[key.lower()]],errors="coerce")
+        raw=d[lookup[key.lower()]]
+        b=pd.to_numeric(raw,errors="coerce")
+        print("CODING_CHECK",year,key,"raw",raw.value_counts(dropna=False).head(10).to_dict(),"numeric",b.value_counts(dropna=False).head(10).to_dict(),flush=True)
         if not b.dropna().isin([0,1,*MISSING]).all():
             raise RuntimeError(f"{year}: nonbinary coding {key}")
         got=int(b.eq(1).sum())
