@@ -1,0 +1,27 @@
+name: Retrieve Oeconomia Copernicana official submission templates
+on:
+  push:
+    branches: [us-shed-empirical-data-20261117]
+    paths: [.github/workflows/oc_templates.yml]
+  workflow_dispatch:
+jobs:
+  retrieve:
+    runs-on: ubuntu-latest
+    permissions: {contents: read}
+    steps:
+      - name: Fetch only publicly available publisher forms
+        run: |
+          mkdir -p templates
+          for entry in "81:Submission_card_official.docx" "381:Authors_final_statements_official.docx" "82:Article_information_biography_official.docx" "83:Manuscript_template_official.docx"; do
+            id="${entry%%:*}"
+            name="${entry#*:}"
+            curl --fail --location --retry 3 --retry-all-errors -A 'Mozilla/5.0' "https://journals.economic-research.pl/oc/libraryFiles/downloadPublic/${id}" -o "templates/${name}"
+            file "templates/${name}"
+            test "$(wc -c < "templates/${name}")" -gt 2000
+          done
+      - name: Upload publisher blank forms
+        uses: actions/upload-artifact@v4
+        with:
+          name: oc-official-blank-forms
+          path: templates/*.docx
+          if-no-files-found: error
